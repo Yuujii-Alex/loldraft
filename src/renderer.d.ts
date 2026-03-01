@@ -22,8 +22,14 @@ declare global {
             onChampSelectUpdate: (
                 callback: (payload: ChampSelectUpdatePayload) => void,
             ) => () => void;
+
+            // Add this:
+            onLcuStatus?: (
+                callback: (status: LcuStatus) => void
+            ) => () => void;
         };
     }
 }
 
 export { };
+export type LcuStatus = 'disconnected' | 'good' | string;

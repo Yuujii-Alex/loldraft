@@ -4,6 +4,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 const CHAMP_SELECT_UPDATE_CHANNEL = 'champ-select:update';
+const LCU_STATUS_CHANNEL = 'lcu:status';
 
 export interface ChampSelectUpdatePayload {
     myRole: string | null;
@@ -22,5 +23,11 @@ contextBridge.exposeInMainWorld('loldraft', {
 
         ipcRenderer.on(CHAMP_SELECT_UPDATE_CHANNEL, listener);
         return () => ipcRenderer.removeListener(CHAMP_SELECT_UPDATE_CHANNEL, listener);
+    },
+
+    onLcuStatus: (callback: (status: 'good' | 'disconnected') => void) => {
+        const listener = (_event: unknown, status: 'good' | 'disconnected') => callback(status);
+        ipcRenderer.on(LCU_STATUS_CHANNEL, listener);
+        return () => ipcRenderer.removeListener(LCU_STATUS_CHANNEL, listener);
     },
 });

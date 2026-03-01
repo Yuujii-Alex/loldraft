@@ -10,6 +10,15 @@ import {
 } from './api/lol';
 
 const CHAMP_SELECT_UPDATE_CHANNEL = 'champ-select:update';
+const LCU_STATUS_CHANNEL = 'lcu:status';
+
+type LcuStatus = 'good' | 'disconnected';
+
+function publishLcuStatus(status: LcuStatus): void {
+  const mainWindow = getLiveMainWindow();
+  if (!mainWindow) return;
+  mainWindow.webContents.send(LCU_STATUS_CHANNEL, status);
+}
 
 interface ChampSelectPlayer {
   championId: number;
@@ -149,6 +158,8 @@ async function startLeagueConnection(): Promise<void> {
       maxRetries: -1,
     });
 
+    publishLcuStatus('good');
+
     leagueSocket.subscribe<ChampSelectSession>('/lol-champ-select/v1/session', (data) => {
       if (!data) return;
       latestSession = data;
@@ -164,7 +175,13 @@ async function startLeagueConnection(): Promise<void> {
       );
     });
   } catch (error) {
+    publishLcuStatus('disconnected');
+    leagueSocket = null;
     console.error('League client not found', error);
+
+    setTimeout(() => {
+      void startLeagueConnection();
+    }, 1500);
   }
 }
 

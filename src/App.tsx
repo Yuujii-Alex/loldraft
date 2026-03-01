@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
 import type { ChampSelectUpdatePayload } from './renderer.d';
+import ChampionPicksRow from './components/ChampionPicksRow';
+import LCUStatus from './components/LCUStatus';
 
 export default function App() {
     const [update, setUpdate] = useState<ChampSelectUpdatePayload | null>(null);
-    const [status, setStatus] = useState('Waiting for champ select...');
+    const [status, setStatus] = useState('disconnected');
+    const [lastUpdateAt, setLastUpdateAt] = useState<number | null>(null);
 
     useEffect(() => {
         if (!window.loldraft?.onChampSelectUpdate) {
@@ -11,13 +14,38 @@ export default function App() {
             return;
         }
 
-        const unsubscribe = window.loldraft.onChampSelectUpdate((payload) => {
+        const unsubscribeUpdate = window.loldraft.onChampSelectUpdate((payload) => {
             setUpdate(payload);
-            setStatus('Connected');
+            setLastUpdateAt(Date.now());
         });
 
-        return () => unsubscribe();
+        const unsubscribeStatus = window.loldraft?.onLcuStatus
+            ? window.loldraft.onLcuStatus((nextStatus) => setStatus(nextStatus))
+            : () => { };
+
+        return () => {
+            unsubscribeUpdate();
+            unsubscribeStatus();
+        };
     }, []);
+
+    // Fallback only if onLcuStatus is unavailable
+    useEffect(() => {
+        if (window.loldraft?.onLcuStatus) return;
+
+        const STALE_AFTER_MS = 5000;
+        const timer = window.setInterval(() => {
+            if (!lastUpdateAt) {
+                setStatus('disconnected');
+                return;
+            }
+
+            const isStale = Date.now() - lastUpdateAt > STALE_AFTER_MS;
+            setStatus(isStale ? 'disconnected' : 'good');
+        }, 1000);
+
+        return () => window.clearInterval(timer);
+    }, [lastUpdateAt]);
 
     const myTeamNames = update?.myTeamNames ?? [];
     const enemyTeamNames = update?.enemyTeamNames ?? [];
@@ -25,26 +53,32 @@ export default function App() {
     const enemyTeamIds = update?.enemyTeamIds ?? [];
 
     return (
-        <main>
-            <h1>LoLDraft</h1>
-            <p>Status: {status}</p>
-            <p>Role: {update?.myRole ?? 'unknown'}</p>
-            <p>
-                Current Selection: {update?.currentChampionName ?? 'No Pick'} (
-                {update?.currentChampionId ?? 0})
+        <main className="min-h-screen min-w-screen bg-[#181818] text-slate-100 p-4">
+            <div className='flex flex-row gap-4'>
+                <h1 className="text-2xl font-bold mb-4">LoLDraft</h1>
+            </div>
+
+            <div className='flex flex-row gap-10 justify-center'>
+                <ChampionPicksRow
+                    label="My Team Picks"
+                    championIds={myTeamIds}
+                    championNames={myTeamNames}
+                />
+
+                <span>vs</span>
+
+                <ChampionPicksRow
+                    label="Enemy Team Picks"
+                    championIds={enemyTeamIds}
+                    championNames={enemyTeamNames}
+                />
+            </div>
+
+            <LCUStatus status={status} />
+            <p className="text-sm text-slate-300">Role: {update?.myRole ?? 'unknown'}</p>
+            <p className="text-sm text-slate-300 mb-4">
+                Current Selection: {update?.currentChampionName ?? 'No Pick'} ({update?.currentChampionId ?? 0})
             </p>
-
-            <h2>My Team (Names)</h2>
-            <pre>{JSON.stringify(myTeamNames, null, 2)}</pre>
-
-            <h2>Enemy Team (Names)</h2>
-            <pre>{JSON.stringify(enemyTeamNames, null, 2)}</pre>
-
-            <h2>My Team (IDs)</h2>
-            <pre>{JSON.stringify(myTeamIds, null, 2)}</pre>
-
-            <h2>Enemy Team (IDs)</h2>
-            <pre>{JSON.stringify(enemyTeamIds, null, 2)}</pre>
         </main>
     );
 }
