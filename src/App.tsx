@@ -1,47 +1,50 @@
 import { useEffect, useState } from 'react';
-
-interface ChampSelectPlayer {
-    championId: number;
-}
-
-interface ChampSelectSession {
-    myTeam?: ChampSelectPlayer[];
-    theirTeam?: ChampSelectPlayer[];
-    [key: string]: unknown;
-}
-
-interface LoldraftApi {
-    onChampSelectUpdate: (callback: (session: ChampSelectSession) => void) => () => void;
-}
+import type { ChampSelectUpdatePayload } from './renderer.d';
 
 export default function App() {
-    const [session, setSession] = useState<ChampSelectSession | null>(null);
+    const [update, setUpdate] = useState<ChampSelectUpdatePayload | null>(null);
+    const [status, setStatus] = useState('Waiting for champ select...');
 
     useEffect(() => {
-        const loldraftApi = (window as typeof window & { loldraft: LoldraftApi }).loldraft;
+        if (!window.loldraft?.onChampSelectUpdate) {
+            setStatus('IPC bridge not available (check preload).');
+            return;
+        }
 
-        const unsubscribe = loldraftApi.onChampSelectUpdate((nextSession: ChampSelectSession) => {
-            setSession(nextSession);
+        const unsubscribe = window.loldraft.onChampSelectUpdate((payload) => {
+            setUpdate(payload);
+            setStatus('Connected');
         });
 
-        return () => {
-            unsubscribe();
-        };
+        return () => unsubscribe();
     }, []);
 
-    const myTeam = (session?.myTeam ?? []).map((player) => player.championId);
-    const enemyTeam = (session?.theirTeam ?? []).map((player) => player.championId);
+    const myTeamNames = update?.myTeamNames ?? [];
+    const enemyTeamNames = update?.enemyTeamNames ?? [];
+    const myTeamIds = update?.myTeamIds ?? [];
+    const enemyTeamIds = update?.enemyTeamIds ?? [];
 
     return (
         <main>
             <h1>LoLDraft</h1>
-            <p>Waiting for champ select updates from League Client...</p>
+            <p>Status: {status}</p>
+            <p>Role: {update?.myRole ?? 'unknown'}</p>
+            <p>
+                Current Selection: {update?.currentChampionName ?? 'No Pick'} (
+                {update?.currentChampionId ?? 0})
+            </p>
 
-            <h2>My Team Champion IDs</h2>
-            <pre>{JSON.stringify(myTeam, null, 2)}</pre>
+            <h2>My Team (Names)</h2>
+            <pre>{JSON.stringify(myTeamNames, null, 2)}</pre>
 
-            <h2>Enemy Team Champion IDs</h2>
-            <pre>{JSON.stringify(enemyTeam, null, 2)}</pre>
+            <h2>Enemy Team (Names)</h2>
+            <pre>{JSON.stringify(enemyTeamNames, null, 2)}</pre>
+
+            <h2>My Team (IDs)</h2>
+            <pre>{JSON.stringify(myTeamIds, null, 2)}</pre>
+
+            <h2>Enemy Team (IDs)</h2>
+            <pre>{JSON.stringify(enemyTeamIds, null, 2)}</pre>
         </main>
     );
 }

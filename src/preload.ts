@@ -5,26 +5,22 @@ import { contextBridge, ipcRenderer } from 'electron';
 
 const CHAMP_SELECT_UPDATE_CHANNEL = 'champ-select:update';
 
-export interface ChampSelectPlayer {
-    championId: number;
-}
-
-export interface ChampSelectSession {
-    myTeam?: ChampSelectPlayer[];
-    theirTeam?: ChampSelectPlayer[];
-    [key: string]: unknown;
+export interface ChampSelectUpdatePayload {
+    myRole: string | null;
+    myTeamIds: number[];
+    enemyTeamIds: number[];
+    myTeamNames: string[];
+    enemyTeamNames: string[];
+    currentChampionId: number;
+    currentChampionName: string;
 }
 
 contextBridge.exposeInMainWorld('loldraft', {
-    onChampSelectUpdate: (callback: (session: ChampSelectSession) => void) => {
-        const listener = (_event: Electron.IpcRendererEvent, data: ChampSelectSession) => {
-            callback(data);
-        };
+    onChampSelectUpdate: (callback: (payload: ChampSelectUpdatePayload) => void) => {
+        const listener = (_event: unknown, payload: ChampSelectUpdatePayload) =>
+            callback(payload);
 
         ipcRenderer.on(CHAMP_SELECT_UPDATE_CHANNEL, listener);
-
-        return () => {
-            ipcRenderer.removeListener(CHAMP_SELECT_UPDATE_CHANNEL, listener);
-        };
+        return () => ipcRenderer.removeListener(CHAMP_SELECT_UPDATE_CHANNEL, listener);
     },
 });
