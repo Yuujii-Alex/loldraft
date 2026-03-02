@@ -8,11 +8,10 @@ import {
   buildChampionIdToNameMap,
   mapChampionIdToName,
 } from './api/lol';
+import type { ChampSelectUpdatePayload, LcuStatus } from './types/champ-select-types';
 
 const CHAMP_SELECT_UPDATE_CHANNEL = 'champ-select:update';
 const LCU_STATUS_CHANNEL = 'lcu:status';
-
-type LcuStatus = 'good' | 'disconnected';
 
 function publishLcuStatus(status: LcuStatus): void {
   const mainWindow = getLiveMainWindow();
@@ -40,16 +39,6 @@ interface ChampSelectSession {
   theirTeam?: ChampSelectPlayer[];
   actions?: ChampSelectAction[][];
   [key: string]: unknown;
-}
-
-interface ChampSelectUpdatePayload {
-  myRole: string | null;
-  myTeamIds: number[];
-  enemyTeamIds: number[];
-  myTeamNames: string[];
-  enemyTeamNames: string[];
-  currentChampionId: number;
-  currentChampionName: string;
 }
 
 function getHoverFromActions(session: ChampSelectSession, cellId?: number): number {

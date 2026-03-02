@@ -1,20 +1,4 @@
-export interface ChampSelectUpdatePayload {
-    myRole: string | null;
-    myTeamIds: number[];
-    enemyTeamIds: number[];
-    myTeamNames: string[];
-    enemyTeamNames: string[];
-    currentChampionId: number;
-    currentChampionName: string;
-}
-
-interface Window {
-    loldraft: {
-        onChampSelectUpdate: (
-            callback: (payload: ChampSelectUpdatePayload) => void,
-        ) => () => void;
-    };
-}
+import type { ChampSelectUpdatePayload, LcuStatus } from './types/champ-select-types';
 
 declare global {
     interface Window {
@@ -32,4 +16,4 @@ declare global {
 }
 
 export { };
-export type LcuStatus = 'disconnected' | 'good' | string;
+export type { ChampSelectUpdatePayload, LcuStatus };
