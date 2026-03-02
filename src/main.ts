@@ -1,8 +1,8 @@
 import { app, BrowserWindow } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
-import { createWebSocketConnection } from 'league-connect';
 import type { LeagueWebSocket } from 'league-connect';
+import { createLcuWebSocket } from './api/lcu';
 import {
   fetchChampionCatalog,
   buildChampionIdToNameMap,
@@ -142,10 +142,7 @@ async function startLeagueConnection(): Promise<void> {
   if (leagueSocket) return;
 
   try {
-    leagueSocket = await createWebSocketConnection({
-      authenticationOptions: { awaitConnection: true },
-      maxRetries: -1,
-    });
+    leagueSocket = await createLcuWebSocket();
 
     publishLcuStatus('good');
 
