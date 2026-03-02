@@ -1,5 +1,7 @@
 export type LcuStatus = 'good' | 'disconnected';
 
+export type DraftPhase = 'PLANNING' | 'BANNING' | 'PICKING' | 'FINALIZATION' | '';
+
 export interface ChampSelectUpdatePayload {
     myRole: string | null;
     myTeamIds: number[];
@@ -8,4 +10,9 @@ export interface ChampSelectUpdatePayload {
     enemyTeamNames: string[];
     currentChampionId: number;
     currentChampionName: string;
+    hasBans: boolean;
+    myTeamBans: number[];
+    theirTeamBans: number[];
+    phase: DraftPhase;
 }
+

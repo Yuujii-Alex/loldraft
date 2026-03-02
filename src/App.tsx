@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react';
 import type { ChampSelectUpdatePayload } from './renderer.d';
 import ChampionPicksRow from './components/ChampionPicksRow';
 import LCUStatus from './components/LCUStatus';
+import BanPicksRow from './components/BanPicksRow';
+import PhaseIndicator from './components/PhaseIndicator';
+import DraftAdvice from './components/DraftAdvice';
 
 export default function App() {
     const [update, setUpdate] = useState<ChampSelectUpdatePayload | null>(null);
@@ -21,6 +24,7 @@ export default function App() {
 
         const unsubscribeStatus = window.loldraft?.onLcuStatus
             ? window.loldraft.onLcuStatus((nextStatus) => setStatus(nextStatus))
+            // eslint-disable-next-line @typescript-eslint/no-empty-function
             : () => { };
 
         return () => {
@@ -54,9 +58,22 @@ export default function App() {
 
     return (
         <main className="min-h-screen min-w-screen bg-[#181818] text-slate-100 p-4">
-            <div className='flex flex-row gap-4'>
-                <h1 className="text-2xl font-bold mb-4">LoLDraft</h1>
+            <div className='flex flex-row justify-between items-center mb-4'>
+                <h1 className="text-2xl font-bold">LoLDraft</h1>
+                {update && (
+                    <PhaseIndicator phase={update.phase} hasBans={update.hasBans} />
+                )}
+                <div /* Placeholder for alignment */ className="w-24"></div>
             </div>
+
+            {update?.hasBans && (
+                <div className="mb-6 mt-[-1rem]">
+                    <BanPicksRow
+                        myTeamBans={update.myTeamBans}
+                        theirTeamBans={update.theirTeamBans}
+                    />
+                </div>
+            )}
 
             <div className='flex flex-row gap-10 justify-center'>
                 <ChampionPicksRow
@@ -72,6 +89,10 @@ export default function App() {
                     championIds={enemyTeamIds}
                     championNames={enemyTeamNames}
                 />
+            </div>
+
+            <div className="mt-8 flex justify-center w-full">
+                <DraftAdvice payload={update} />
             </div>
 
             <LCUStatus status={status} />

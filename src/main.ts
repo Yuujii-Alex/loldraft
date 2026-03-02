@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
 import type { LeagueWebSocket } from 'league-connect';
@@ -8,6 +8,10 @@ import {
   buildChampionIdToNameMap,
   mapChampionIdToName,
 } from './api/lol';
+import { getChampionAnalysis, getLaneMatchupGuide, getMetaChampions } from './api/mcp';
+import { generateLaneTips, generateDraftSuggestions } from './api/llm';
+import { preloadDDragonData } from './api/ddragon';
+import type { GameplanPayload, SuggestionsPayload } from './types/build-types';
 import type { ChampSelectUpdatePayload, LcuStatus } from './types/champ-select-types';
 
 const CHAMP_SELECT_UPDATE_CHANNEL = 'champ-select:update';
@@ -38,6 +42,13 @@ interface ChampSelectSession {
   myTeam?: ChampSelectPlayer[];
   theirTeam?: ChampSelectPlayer[];
   actions?: ChampSelectAction[][];
+  hasSimultaneousBans?: boolean;
+  timer?: { phase: string; isInfinite: boolean };
+  bans?: {
+    myTeamBans: number[];
+    theirTeamBans: number[];
+    numBans: number;
+  }
   [key: string]: unknown;
 }
 
@@ -122,6 +133,18 @@ async function publishChampSelectUpdate(): Promise<void> {
     ? getEffectiveChampionId(me, session)
     : currentChampionId;
 
+  const myTeamBans = session.bans?.myTeamBans ?? [];
+  const theirTeamBans = session.bans?.theirTeamBans ?? [];
+
+  const hasBans = session.hasSimultaneousBans === true ||
+    (session.actions?.flat().some(a => a.type === 'ban') ?? false);
+
+  let phase = (session.timer?.phase as string) ?? '';
+  if (phase === 'BAN_PICK') {
+    const hasIncompleteBans = session.actions?.flat().some(a => a.type === 'ban' && !a.completed);
+    phase = hasIncompleteBans ? 'BANNING' : 'PICKING';
+  }
+
   const payload: ChampSelectUpdatePayload = {
     myRole: detectMyRole(session),
     myTeamIds,
@@ -133,6 +156,10 @@ async function publishChampSelectUpdate(): Promise<void> {
       liveCurrentChampionId === 0
         ? 'No Pick'
         : mapChampionIdToName(liveCurrentChampionId, idToName),
+    hasBans,
+    myTeamBans,
+    theirTeamBans,
+    phase: phase as ChampSelectUpdatePayload['phase'],
   };
 
   mainWindow.webContents.send(CHAMP_SELECT_UPDATE_CHANNEL, payload);
@@ -176,6 +203,58 @@ if (started) {
   app.quit();
 }
 
+// LCU provides: TOP, JUNGLE, MIDDLE, BOTTOM, UTILITY, or "" (empty string in practice tool/blind)
+// OP.GG expects: top, jungle, mid, adc, support
+function mapPosition(raw: string): string {
+  let pos = (raw || 'mid').toLowerCase();
+  if (pos === 'middle' || pos === 'unknown' || pos === 'unselected') pos = 'mid';
+  if (pos === 'bottom') pos = 'adc';
+  if (pos === 'utility') pos = 'support';
+  return pos;
+}
+
+ipcMain.handle('mcp:generateGameplan', async (_event, args: { myChampion: string; opponentChampion: string | null; position: string }): Promise<GameplanPayload | string> => {
+  try {
+    const pos = mapPosition(args.position);
+    console.log('Fetching MCP build data for', args.myChampion, 'at', pos);
+    const build = await getChampionAnalysis(args.myChampion, pos);
+
+    // Fetch matchup guide + generate tips in parallel
+    let matchupText: unknown = null;
+    if (args.opponentChampion) {
+      try {
+        matchupText = await getLaneMatchupGuide(args.myChampion, args.opponentChampion, pos);
+      } catch (e) {
+        console.warn('Could not fetch matchup guide, continuing without it.');
+      }
+    }
+
+    console.log('Generating lane tips...');
+    const tips = await generateLaneTips(args.myChampion, pos, args.opponentChampion, matchupText);
+    build.tips = tips;
+
+    return { championName: args.myChampion, position: pos, build };
+  } catch (error: unknown) {
+    console.error('Failed to generate gameplan:', error);
+    return `Failed to generate gameplan: ${(error as Error).message}`;
+  }
+});
+
+ipcMain.handle('mcp:getDraftSuggestions', async (_event, args: { position: string; myTeamNames: string[]; enemyTeamNames: string[] }): Promise<SuggestionsPayload | string> => {
+  try {
+    const pos = mapPosition(args.position);
+    console.log('Fetching meta champions for', pos);
+    const metaChampions = await getMetaChampions(pos);
+
+    console.log('Generating draft suggestions...');
+    const suggestions = await generateDraftSuggestions(pos, args.myTeamNames, args.enemyTeamNames, metaChampions);
+    return { suggestions };
+  } catch (error: unknown) {
+    console.error('Failed to generate draft suggestions:', error);
+    return `Failed to generate suggestions: ${(error as Error).message}`;
+  }
+});
+
 const createWindow = () => {
   const mainWindow = new BrowserWindow({
     width: 800,
@@ -202,6 +281,12 @@ const createWindow = () => {
 
   startLeagueConnection().catch((error: unknown) => {
     console.error('Failed to initialize League connection', error);
+  });
+
+  preloadDDragonData().then(ver => {
+    console.log(`DDragon data loaded (version ${ver})`);
+  }).catch(err => {
+    console.warn('Failed to preload DDragon data:', err);
   });
 };
 

@@ -3,6 +3,7 @@
 
 import { contextBridge, ipcRenderer } from 'electron';
 import type { ChampSelectUpdatePayload, LcuStatus } from './types/champ-select-types';
+import type { GameplanPayload, SuggestionsPayload } from './types/build-types';
 
 const CHAMP_SELECT_UPDATE_CHANNEL = 'champ-select:update';
 const LCU_STATUS_CHANNEL = 'lcu:status';
@@ -17,8 +18,15 @@ contextBridge.exposeInMainWorld('loldraft', {
     },
 
     onLcuStatus: (callback: (status: LcuStatus) => void) => {
-        const listener = (_event: unknown, status: LcuStatus) => callback(status);
-        ipcRenderer.on(LCU_STATUS_CHANNEL, listener);
-        return () => ipcRenderer.removeListener(LCU_STATUS_CHANNEL, listener);
+        ipcRenderer.on(LCU_STATUS_CHANNEL, (_event, status: LcuStatus) => callback(status));
+        return () => ipcRenderer.removeAllListeners(LCU_STATUS_CHANNEL);
     },
+
+    generateGameplan: (myChampion: string, opponentChampion: string | null, position: string): Promise<GameplanPayload | string> => {
+        return ipcRenderer.invoke('mcp:generateGameplan', { myChampion, opponentChampion, position });
+    },
+
+    getDraftSuggestions: (position: string, myTeamNames: string[], enemyTeamNames: string[]): Promise<SuggestionsPayload | string> => {
+        return ipcRenderer.invoke('mcp:getDraftSuggestions', { position, myTeamNames, enemyTeamNames });
+    }
 });
